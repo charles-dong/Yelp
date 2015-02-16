@@ -25,4 +25,5 @@ Filter page
 Just required elements completed thus far - working on optionals now.
 
 GIF Walkthrough:
+
 ![Alt text](https://github.com/charles-dong/Yelp/blob/master/Walkthrough_Required_Features.gif "GIF Walkthrough")
