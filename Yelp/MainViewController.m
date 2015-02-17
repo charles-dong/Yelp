@@ -22,11 +22,14 @@ int const ROWHEIGHTCONSTANT = 85;
 @interface MainViewController () <UITableViewDataSource, UITableViewDelegate, FiltersViewControllerDelegate, UISearchBarDelegate>
 
 @property (nonatomic, strong) YelpClient *client;
-@property (nonatomic, strong) NSArray * businesses;
+@property (nonatomic, strong) NSMutableArray * businesses;
 @property (weak, nonatomic) IBOutlet UITableView *tableView;
 @property (nonatomic, strong) BusinessCell *prototypeBusinessCell;
 @property (nonatomic, strong) UISearchBar *searchBar;
 @property (nonatomic, strong) FiltersViewController *filterVC;
+@property (nonatomic ,assign) BOOL infiniteLoading;
+@property (nonatomic, strong) NSMutableDictionary *filters;
+
 - (void)onFilterButton;
 - (void)fetchBusinessesWithQuery:(NSString *)query params:(NSDictionary *)params;
 @end
@@ -48,6 +51,10 @@ int const ROWHEIGHTCONSTANT = 85;
 {
     [super viewDidLoad];
     // Do any additional setup after loading the view from its nib.
+    
+    self.infiniteLoading = YES;
+    self.filters = [NSMutableDictionary dictionary];
+    self.businesses = [NSMutableArray array];
     
     // nav bar
     self.title = @"Yelp";
@@ -84,6 +91,14 @@ int const ROWHEIGHTCONSTANT = 85;
     
     BusinessCell *cell = [tableView dequeueReusableCellWithIdentifier:@"BusinessCell"];
     cell.business = self.businesses[indexPath.row];
+    
+    // if reaching last row, trigger infinite loading with 'offset' filter
+    if ((indexPath.row >= self.businesses.count - 1) && self.infiniteLoading) {
+        NSMutableDictionary *tempFilters = [self.filters mutableCopy];
+        [tempFilters setObject:@(self.businesses.count) forKey:@"offset"];
+        [self fetchBusinessesWithQuery:DEFAULT_SEARCH_QUERY params:tempFilters];
+    }
+    // NSLog(@"cell.business = %@", cell.business);
     return cell;
 }
 
@@ -104,7 +119,12 @@ int const ROWHEIGHTCONSTANT = 85;
 #pragma mark - Filter Delegate Methods
 
 - (void)filtersViewController:(FiltersViewController *)filtersViewController didChangeFilters:(NSDictionary *)filters {
-    [self fetchBusinessesWithQuery:DEFAULT_SEARCH_QUERY params:filters];
+    self.filters = [filters mutableCopy];
+    
+    // turning off infinite loading for this query will reset self.businesses
+    self.infiniteLoading = NO;
+    [self fetchBusinessesWithQuery:DEFAULT_SEARCH_QUERY params:self.filters];
+    
     NSLog(@"New Filters: %@", filters);
 }
 
@@ -119,9 +139,15 @@ int const ROWHEIGHTCONSTANT = 85;
     // search yelp
     [self.client searchWithTerm:query params:params success:^(AFHTTPRequestOperation *operation, id response) {
         // NSLog(@"response: %@", response);
-        NSArray *businessDictionaries = response[@"businesses"];
-        self.businesses = [Business businessesWithDictionaries:businessDictionaries];
+        NSArray *tempBusinessDictionaries = response[@"businesses"];
+        NSMutableArray *businessDictionaries = [Business businessesWithDictionaries:tempBusinessDictionaries];
         
+        if (self.infiniteLoading) {
+            [self.businesses addObjectsFromArray:businessDictionaries];
+        } else {
+            self.businesses = businessDictionaries;
+            self.infiniteLoading = YES;
+        }
         [self.tableView reloadData];
         
     } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
